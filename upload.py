@@ -129,10 +129,10 @@ class MetaInfo(QWidget):
         if not self.checkUserInfo():
             return
         self.preShowCatalogSignal.emit()
-        url, header = self.getUrlAndHeader("categories")
+        url, header = self.getUrlAndHeader('categories?_fields=id,name&fields=id,name')
         response = requests.get(url, headers=header)
         if response.status_code != requests.codes.ok or response.status_code != requests.codes.created:
-            msg = '发布失败,返回结果:' + str(response)
+            msg = '查询失败，返回结果:' + str(response)
         else:
             data = json.loads(response.text)
             msg = ''
@@ -183,7 +183,7 @@ class MetaInfo(QWidget):
             post['categories'] = categories
         url, header = self.getUrlAndHeader(method)
         response = requests.post(url, headers=header, json=post)
-        if response.status_code == requests.codes.ok | response.status_code == requests.codes.created:
+        if response.status_code == requests.codes.ok or response.status_code == requests.codes.created:
             msg = '发布成功'
         else:
             msg = '发布失败,返回结果:' + str(response)
@@ -195,7 +195,7 @@ class MetaInfo(QWidget):
 
     # 根据文章别名查询文章 ID
     def get_post_id_by_slug(self, slug):
-        url, header = self.getUrlAndHeader("posts?slug=" + slug)
+        url, header = self.getUrlAndHeader("posts?slug=" + slug + '&fields=id&_fields=id')
         response = requests.get(url, headers=header)
         if response.status_code == 200 and len(response.json()) > 0:
             return response.json()[0]['id']
