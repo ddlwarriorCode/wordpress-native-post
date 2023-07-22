@@ -131,7 +131,7 @@ class MetaInfo(QWidget):
         self.preShowCatalogSignal.emit()
         url, header = self.getUrlAndHeader('categories?_fields=id,name&fields=id,name')
         response = requests.get(url, headers=header)
-        if response.status_code != requests.codes.ok or response.status_code != requests.codes.created:
+        if response.status_code != 200 and response.status_code != 201:
             msg = '查询失败，返回结果:' + str(response)
         else:
             data = json.loads(response.text)
