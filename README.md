@@ -1,5 +1,7 @@
 # wordpress-native-post
 
+[下载地址 download](https://github.com/ddlwarriorCode/wordpress-native-post/releases/tag/v1.0.0)
+
 ## 详细介绍
 [将本地markdown推送到wordpress - ddl战士的妙妙屋 (ddlwarrior.cn)](https://www.ddlwarrior.cn/wordpress-native-post/)
 
