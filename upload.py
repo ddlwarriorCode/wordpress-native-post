@@ -4,10 +4,10 @@ import os
 import threading
 import time
 
-import markdown
+import mistune
 import requests
-from PySide6.QtCore import Signal, QSettings
-from PySide6.QtWidgets import QWidget, QSizePolicy, QFileDialog
+from PySide6.QtCore import Signal, QSettings, Qt
+from PySide6.QtWidgets import QWidget, QSizePolicy, QFileDialog, QMessageBox, QDialog
 
 from myutils import showMsgBox
 from upload_ui import Ui_Form
@@ -20,6 +20,9 @@ class MetaInfo(QWidget):
     afterPostSignal = Signal(str)
     checkFailureSignal = Signal(str)
     missUserInfo = Signal(str)
+    showIsOverwrite = Signal(str)
+    beginGetPostId = Signal()
+    endGetPostId = Signal()
 
     def __init__(self):
         super().__init__()
@@ -31,6 +34,14 @@ class MetaInfo(QWidget):
         self.setLayout(self.ui.globalLayout)
         self.setContentsMargins(15, 15, 15, 15)
         self.setWindowTitle('wordpress-native-post')
+        # 读取配置文件中信息
+        settings = QSettings('myapp', 'upload')
+        self.ui.host.setText(settings.value('host', ''))
+        self.ui.user.setText(settings.value('user', ''))
+        self.ui.password.setText(settings.value('password', ''))
+        self.msgbox_is_overwrite = QMessageBox()
+        self.msgbox_is_overwrite.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        self.msgbox_is_overwrite.setDefaultButton(QMessageBox.Cancel)
         self.ui.post.clicked.connect(self.postBlog)
         self.ui.selectFile.clicked.connect(self.getFileName)
         self.ui.showCatalog.clicked.connect(self.showCatalog)
@@ -41,11 +52,17 @@ class MetaInfo(QWidget):
         self.ui.saveConfiguration.clicked.connect(self.saveConfiguration)
         self.checkFailureSignal.connect(self.checkFailureSlot)
         self.missUserInfo.connect(self.checkFailureSlot)
-        # 读取配置文件中信息
-        settings = QSettings('myapp', 'upload')
-        self.ui.host.setText(settings.value('host', ''))
-        self.ui.user.setText(settings.value('user', ''))
-        self.ui.password.setText(settings.value('password', ''))
+        self.showIsOverwrite.connect(self.on_ok_show_is_overwrite)
+        self.beginGetPostId.connect(lambda: self.switchPost())
+        self.endGetPostId.connect(lambda: self.switchPost())
+
+    def on_ok_show_is_overwrite(self, post_id):
+        self.msgbox_is_overwrite.setText(f"别名为{self.ui.slug.text()}的文章已经发布，是否要覆盖？")
+        response = self.msgbox_is_overwrite.exec()
+        print(str(response) + "msgbox_is_overwrite.exec")
+        if response == QMessageBox.Ok:
+            print("response == QMessageBox.Ok")
+            self.urlPostBlog("posts/" + post_id)
 
     @staticmethod
     def checkFailureSlot(msg):
@@ -114,7 +131,7 @@ class MetaInfo(QWidget):
         self.preShowCatalogSignal.emit()
         url, header = self.getUrlAndHeader("categories")
         response = requests.get(url, headers=header)
-        if response.status_code != requests.codes.ok:
+        if response.status_code != requests.codes.ok or response.status_code != requests.codes.created:
             msg = '发布失败,返回结果:' + str(response)
         else:
             data = json.loads(response.text)
@@ -143,10 +160,15 @@ class MetaInfo(QWidget):
             return
         if not self.isValid():
             return
+        if self.isExistSlug():
+            return
+        self.urlPostBlog("posts")
+
+    def urlPostBlog(self, method):
         self.prePostSignal.emit()
         with open(self.ui.filename.text(), 'r', encoding='utf-8') as f:
             content = f.read()
-        content = markdown.markdown(content)
+        content = mistune.html(content)
         post = {
             'title': self.ui.title.text(),
             'slug': self.ui.slug.text(),
@@ -159,7 +181,7 @@ class MetaInfo(QWidget):
             post['categories'] = 1
         else:
             post['categories'] = categories
-        url, header = self.getUrlAndHeader("posts")
+        url, header = self.getUrlAndHeader(method)
         response = requests.post(url, headers=header, json=post)
         if response.status_code == requests.codes.ok | response.status_code == requests.codes.created:
             msg = '发布成功'
@@ -170,3 +192,21 @@ class MetaInfo(QWidget):
     def getFileName(self):
         fileName = QFileDialog.getOpenFileName(self, "选择本地文件", "", "*.md;*.txt")[0]
         self.ui.filename.setText(fileName)
+
+    # 根据文章别名查询文章 ID
+    def get_post_id_by_slug(self, slug):
+        url, header = self.getUrlAndHeader("posts?slug=" + slug)
+        response = requests.get(url, headers=header)
+        if response.status_code == 200 and len(response.json()) > 0:
+            return response.json()[0]['id']
+        else:
+            return None
+
+    def isExistSlug(self):
+        self.beginGetPostId.emit()
+        postId = self.get_post_id_by_slug(self.ui.slug.text())
+        self.beginGetPostId.emit()
+        if postId is None:
+            return False
+        self.showIsOverwrite.emit(str(postId))
+        return True
